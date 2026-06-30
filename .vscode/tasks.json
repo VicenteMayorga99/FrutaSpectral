@@ -1,0 +1,115 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Arduino: Compilar ESP32",
+      "type": "shell",
+      "command": "arduino-cli",
+      "args": [
+        "compile",
+        "--fqbn",
+        "esp32:esp32:esp32",
+        "."
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "Arduino: Cargar ESP32",
+      "type": "shell",
+      "command": "arduino-cli",
+      "args": [
+        "upload",
+        "-p",
+        "COM3",
+        "--fqbn",
+        "esp32:esp32:esp32",
+        "."
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "Arduino: Compilar y cargar ESP32",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-Command",
+        "arduino-cli compile --fqbn esp32:esp32:esp32 .; if ($LASTEXITCODE -eq 0) { arduino-cli upload -p COM3 --fqbn esp32:esp32:esp32 . }"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": []
+    },
+
+
+
+
+    
+    {
+      "label": "Arduino: Compilar pruebas",
+      "type": "shell",
+      "command": "arduino-cli",
+      "args": [
+        "compile",
+        "--fqbn",
+        "esp32:esp32:esp32",
+        "."
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}/pruebas"
+      },
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "Arduino: Cargar pruebas",
+      "type": "shell",
+      "command": "arduino-cli",
+      "args": [
+        "upload",
+        "-p",
+        "COM3",
+        "--fqbn",
+        "esp32:esp32:esp32",
+        "."
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}/pruebas"
+      },
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "Arduino: Compilar y cargar pruebas",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-Command",
+        "arduino-cli compile --fqbn esp32:esp32:esp32 .; if ($LASTEXITCODE -eq 0) { arduino-cli upload -p COM3 --fqbn esp32:esp32:esp32 . }"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}/pruebas"
+      },
+      "group": "build",
+      "problemMatcher": []
+    }
+  ]
+}
