@@ -5,7 +5,7 @@
   - Inicializa el controlador SSD1306.
   - Usa la franja amarilla superior para mostrar el promedio visible en nm.
   - Dibuja una barra con zoom entre F4 515 nm y F8 680 nm.
-  - Usa la zona azul inferior para graficar F4-F8 y Clear.
+  - Usa la zona azul inferior para graficar F4-F8.
 */
 
 #include <Adafruit_GFX.h>
@@ -50,7 +50,7 @@ uint16_t obtenerMaximoCanales(const MuestraDatosSensor *muestra) {
 }
 
 void dibujarBarraCanal(int x, const char *etiqueta, uint16_t valor, uint16_t maximo) {
-  const int anchoBarra = 13;
+  const int anchoBarra = 17;
   const int yBase = PANTALLA_ALTO - 1;
   const int altoMaximoBarra = 30;
   int altoBarra = 0;
@@ -95,11 +95,10 @@ void actualizarPantallaDatosVisibles(const MuestraDatosSensor *muestra,
   // La zona inferior azul muestra la respuesta relativa de cada canal leido.
   pantalla.fillRect(0, ZONA_AZUL_Y, PANTALLA_ANCHO, ZONA_AZUL_ALTO, SSD1306_BLACK);
   dibujarBarraCanal(0, "F4", muestra->f4, maximoCanales);
-  dibujarBarraCanal(21, "F5", muestra->f5, maximoCanales);
-  dibujarBarraCanal(42, "F6", muestra->f6, maximoCanales);
-  dibujarBarraCanal(63, "F7", muestra->f7, maximoCanales);
-  dibujarBarraCanal(84, "F8", muestra->f8, maximoCanales);
-  dibujarBarraCanal(105, "CL", muestra->clear, maximoCanales);
+  dibujarBarraCanal(27, "F5", muestra->f5, maximoCanales);
+  dibujarBarraCanal(54, "F6", muestra->f6, maximoCanales);
+  dibujarBarraCanal(81, "F7", muestra->f7, maximoCanales);
+  dibujarBarraCanal(108, "F8", muestra->f8, maximoCanales);
 
   pantalla.display();
 }
