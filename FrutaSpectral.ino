@@ -50,11 +50,11 @@ bool obtenerDatosSeleccionados(MuestraDatosSensor *muestra);
 bool procesarDatosVisibles(const MuestraDatosSensor *muestra, DatosProcesadosVisibles *datos);
 void imprimirDatosProcesadosEnSerial(const DatosProcesadosVisibles *datos);
 void controlarLedSensor();
+void iniciarPantalla();
+void actualizarPantallaDatosVisibles(const MuestraDatosSensor *muestra,
+                                     const DatosProcesadosVisibles *datos);
 
 void iniciarSensorAS7341() {
-  // Inicializa el bus I2C en los pines definidos para el ESP32.
-  Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
-
   Serial.println();
   Serial.println("Iniciando sensor AS7341...");
   Serial.print("Direccion I2C: 0x");
@@ -86,7 +86,13 @@ void setup() {
   Serial.begin(115200);
   delay(1000);
 
-  // Configura el bus I2C y verifica que el sensor AS7341 responda.
+  // Inicializa el bus I2C compartido por la pantalla y el sensor.
+  Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
+
+  // Primero prueba la pantalla, para confirmar que la OLED responde.
+  iniciarPantalla();
+
+  // Verifica que el sensor AS7341 responda.
   iniciarSensorAS7341();
 
   // Configura el pulsador que controla el LED integrado del modulo AS7341.
@@ -102,6 +108,7 @@ void loop() {
   DatosProcesadosVisibles datos;
   if (obtenerDatosSeleccionados(&muestra) && procesarDatosVisibles(&muestra, &datos)) {
     imprimirDatosProcesadosEnSerial(&datos);
+    actualizarPantallaDatosVisibles(&muestra, &datos);
   }
 
   // Lectura completa comentada. Descomentar para ver todos los canales.
@@ -117,5 +124,3 @@ void loop() {
     delay(10);
   }
 }
-
-
