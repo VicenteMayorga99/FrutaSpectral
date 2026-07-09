@@ -54,6 +54,9 @@ void controlarLedSensor();
 void iniciarPantalla();
 void actualizarPantallaDatosVisibles(const MuestraDatosSensor *muestra,
                                      const DatosProcesadosVisibles *datos);
+void iniciarComunicacionEthernet();
+void actualizarDatoEthernet(const DatosProcesadosVisibles *datos);
+void atenderComunicacionEthernet();
 
 void iniciarSensorAS7341() {
   Serial.println();
@@ -98,11 +101,15 @@ void setup() {
 
   // Configura el pulsador que controla el LED integrado del modulo AS7341.
   controlarLedSensor();
+
+  // Inicializa la comunicacion RJ45 mediante el modulo ENC28J60.
+  iniciarComunicacionEthernet();
 }
 
 void loop() {
   // Actualiza el interruptor del LED del modulo con el pulsador en D12.
   controlarLedSensor();
+  atenderComunicacionEthernet();
 
   // Toma los datos visibles, los procesa y los imprime por Serial.
   MuestraDatosSensor muestra;
@@ -110,6 +117,8 @@ void loop() {
   if (obtenerDatosSeleccionados(&muestra) && procesarDatosVisibles(&muestra, &datos)) {
     imprimirDatosProcesadosEnSerial(&datos);
     actualizarPantallaDatosVisibles(&muestra, &datos);
+    actualizarDatoEthernet(&datos);
+    atenderComunicacionEthernet();
   }
 
   // Lectura completa comentada. Descomentar para ver todos los canales.
@@ -122,6 +131,7 @@ void loop() {
   unsigned long inicioPausa = millis();
   while (millis() - inicioPausa < 1000) {
     controlarLedSensor();
+    atenderComunicacionEthernet();
     delay(10);
   }
 }
