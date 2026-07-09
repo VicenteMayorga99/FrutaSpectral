@@ -1,0 +1,319 @@
+CONTEXTO PARA CODEX - SCRIPT DE VERIFICACIÓN INICIAL DEL ENC28J60 CON ESP32
+
+Objetivo general
+================
+Necesito un sketch de prueba para verificar que una ESP32 se está comunicando correctamente por SPI con un módulo Ethernet basado en el chip ENC28J60.
+
+Este código es solo de diagnóstico inicial. Después será desechado/reemplazado por otro programa dedicado a la comunicación real entre la ESP32 y un PLC Siemens S7-400 mediante Ethernet. Por ahora el objetivo NO es implementar el protocolo final con el PLC, sino confirmar que:
+
+1. La ESP32 inicializa correctamente el bus SPI.
+2. El chip ENC28J60 responde por SPI.
+3. El módulo puede obtener o configurar una IP.
+4. Opcionalmente, el módulo puede responder en red mediante RJ45.
+5. El monitor serial muestra mensajes claros para depurar alimentación, cableado o librerías.
+
+Hardware involucrado
+====================
+Microcontrolador:
+- ESP32.
+- Se está programando desde Arduino IDE / VS Code con framework Arduino.
+- La ESP32 trabaja con lógica de 3,3 V.
+- El monitor serial por USB se usará solo para diagnóstico.
+
+Módulo Ethernet:
+- Módulo Ethernet con chip ENC28J60.
+- Comunicación con la ESP32 mediante SPI.
+- Conector RJ45 para conexión Ethernet.
+- El módulo tiene una serigrafía algo extraña. Los pines reales visibles en la placa son:
+
+    5V    GND
+    LNT   CLK
+    SO    WOL
+    SCK   ST
+    RST   CS
+    Q3    GND
+
+Interpretación de la serigrafía:
+- LNT probablemente corresponde a INT.
+- ST probablemente corresponde a SI / MOSI.
+- SO corresponde a MISO.
+- Q3 probablemente corresponde a 3.3 V / 3V3.
+- 5V es entrada de alimentación del módulo, probablemente pasando por regulador interno.
+- GND es tierra común.
+- CLK es salida de reloj del ENC28J60, no necesaria para esta prueba.
+- WOL es Wake-on-LAN, no necesario para esta prueba.
+- RST es reset del módulo, activo en bajo. No se conectará inicialmente.
+
+Alimentación
+============
+Para esta prueba se alimentará el módulo por el pin 5V y GND.
+
+Conexión de alimentación:
+- 5V del módulo ENC28J60 -> 5V/VIN/VBUS de la ESP32 o fuente externa de 5 V.
+- GND del módulo ENC28J60 -> GND de la ESP32.
+- No conectar el pin Q3/3.3V si el módulo ya está alimentado por 5V.
+
+Antes de la prueba se recomienda medir con multímetro:
+- Entre 5V y GND del módulo: debería haber aproximadamente 5 V.
+- Entre Q3 y GND, con el módulo alimentado por 5V: debería aparecer aproximadamente 3,3 V si Q3 es la salida/regulación de 3,3 V del módulo.
+
+Importante:
+- No alimentar simultáneamente el módulo por 5V y por Q3/3.3V.
+- El chip ENC28J60 internamente trabaja a 3,3 V, pero este módulo parece aceptar 5 V por el pin 5V porque tiene regulador.
+- Las señales SPI hacia la ESP32 deben quedar a nivel lógico de 3,3 V. Como el ENC28J60 trabaja internamente a 3,3 V, la salida SO/MISO debería ser compatible con la ESP32.
+
+Pines conectados actualmente
+============================
+Conexión actual entre ENC28J60 y ESP32:
+
+    ENC28J60       ESP32
+    ---------------------
+    SCK       ->    GPIO14
+    ST/MOSI   ->    GPIO27
+    SO/MISO   ->    GPIO26
+    CS        ->    GPIO25
+
+Además:
+    5V        ->    5V/VIN/VBUS de ESP32 o fuente 5 V
+    GND       ->    GND ESP32
+
+Pines NO conectados inicialmente
+================================
+Los siguientes pines del módulo se dejan sin conectar en esta prueba inicial:
+
+1. RST
+   - Reset del ENC28J60.
+   - Activo en bajo.
+   - No es obligatorio si el módulo ya tiene pull-up interno.
+   - Si el chip no inicializa de forma estable, se puede agregar después a un GPIO libre o poner pull-up de 10 kΩ hacia Q3/3.3V.
+   - Por ahora NO usarlo en el código.
+
+2. LNT / INT
+   - Probablemente pin de interrupción del ENC28J60.
+   - Opcional.
+   - No se necesita para una prueba básica con polling.
+
+3. CLK
+   - Salida de reloj programable del ENC28J60.
+   - No se necesita para esta prueba.
+
+4. WOL
+   - Wake-on-LAN.
+   - No se necesita para esta prueba.
+
+5. Q3 / 3.3V
+   - Probablemente línea de 3,3 V del módulo.
+   - No conectarla si se está alimentando por 5V.
+   - Se puede medir con multímetro para verificar si corresponde a la salida de 3,3 V del regulador.
+
+6. GND extra
+   - Tierra redundante.
+   - Puede quedar libre si ya hay un GND conectado, aunque conectar ambos GND tampoco debería generar problema.
+
+Bus SPI
+=======
+El ENC28J60 usa SPI, no UART.
+
+Pines SPI definidos para esta prueba:
+
+    SCK  = GPIO14
+    MOSI = GPIO27   // pin ST del módulo
+    MISO = GPIO26   // pin SO del módulo
+    CS   = GPIO25
+
+En Arduino para ESP32 se debe inicializar SPI con pines explícitos, por ejemplo:
+
+    SPI.begin(PIN_ETH_SCK, PIN_ETH_MISO, PIN_ETH_MOSI, PIN_ETH_CS);
+
+Luego inicializar la librería del ENC28J60 usando el CS correcto.
+
+Librería sugerida
+=================
+Preferir usar una librería compatible con ENC28J60 y ESP32 en Arduino.
+
+Opciones posibles:
+1. EthernetENC
+   - Recomendable porque usa una API parecida a la librería Ethernet.
+   - Permite inicializar con Ethernet.init(CS).
+   - Sirve para DHCP, IP fija, cliente TCP, servidor TCP, etc.
+
+2. EtherCard
+   - También es específica para ENC28J60.
+   - Puede ser útil para una prueba básica de ether.begin().
+   - Si hay problemas de compatibilidad con ESP32, usar EthernetENC.
+
+Se prefiere que Codex genere el sketch usando EthernetENC, salvo que indique una razón clara para usar otra.
+
+Objetivo del script de prueba
+=============================
+El sketch debe hacer lo siguiente:
+
+1. Abrir monitor serial:
+   - Serial.begin(115200)
+   - Esperar un poco al inicio para que se alcance a abrir el monitor.
+
+2. Imprimir un resumen del cableado usado:
+   - SCK GPIO14
+   - MOSI/ST GPIO27
+   - MISO/SO GPIO26
+   - CS GPIO25
+   - RST no conectado
+   - INT no conectado
+
+3. Inicializar SPI con los pines personalizados:
+   - SPI.begin(14, 26, 27, 25)
+
+4. Inicializar el módulo ENC28J60 con la librería seleccionada:
+   - Usar Ethernet.init(25) si se usa EthernetENC.
+   - Configurar una MAC inventada, pero válida localmente. Ejemplo:
+     DE:AD:BE:EF:28:60
+
+5. Hacer una primera prueba sin depender necesariamente del RJ45:
+   - Intentar inicializar el chip.
+   - Si la librería permite detectar hardware, imprimir si detecta o no detecta el ENC28J60.
+   - Si la librería no tiene una función explícita de hardwareStatus(), usar el resultado de Ethernet.begin(mac) o una inicialización equivalente como indicador inicial.
+   - Mensajes claros:
+       "OK: ENC28J60 detectado por SPI"
+       "ERROR: no se pudo detectar/inicializar ENC28J60"
+       "Revisar alimentación, GND, SCK, MOSI/ST, MISO/SO y CS"
+
+6. Después probar red:
+   - Intentar DHCP si hay RJ45 conectado a router/switch.
+   - Si DHCP falla, configurar IP fija.
+   - Imprimir la IP local.
+   - Mantener un loop que procese la red si la librería lo requiere.
+
+7. Idealmente levantar un servidor web muy simple:
+   - Puerto 80.
+   - Al entrar desde el navegador a la IP de la ESP32, responder con texto:
+       "ENC28J60 OK"
+       "ESP32 Ethernet test"
+       Pinout usado.
+   - Esto permite verificar con un notebook que la red está funcionando.
+
+8. Alternativamente, si no se implementa servidor web, al menos imprimir:
+   - IP local.
+   - Gateway.
+   - Máscara.
+   - Resultado de DHCP o IP fija.
+
+Prueba esperada
+===============
+Secuencia de prueba recomendada:
+
+Etapa 1: sin preocuparse del PLC
+--------------------------------
+1. Conectar alimentación, GND, SCK, ST/MOSI, SO/MISO y CS.
+2. No conectar RST, INT, CLK, WOL ni Q3.
+3. Cargar sketch.
+4. Abrir monitor serial a 115200.
+5. Confirmar que el programa no se queda pegado.
+6. Confirmar que no aparece error de inicialización.
+
+Etapa 2: con RJ45 a red común
+-----------------------------
+1. Conectar RJ45 del ENC28J60 a un switch/router.
+2. Revisar LEDs del conector RJ45 si el módulo los tiene.
+3. Confirmar por monitor serial si obtuvo IP por DHCP.
+4. Desde un notebook en la misma red, probar:
+   - ping a la IP del módulo, si responde.
+   - navegador web a http://IP_DEL_MODULO si se implementa servidor web.
+5. Si DHCP falla, usar IP fija dentro del rango de la red.
+
+Etapa 3: luego recién pensar en PLC
+-----------------------------------
+El PLC Siemens S7-400 tiene un módulo CP 443-1 Ethernet. La conexión final sería:
+
+    ESP32 -> SPI -> ENC28J60 -> RJ45 -> switch/red -> CP443-1 -> CPU S7-400
+
+Pero esta prueba NO debe implementar todavía comunicación con el PLC. Solo debe confirmar que el ENC28J60 y la ESP32 están funcionando.
+
+Criterios de éxito
+==================
+La prueba se considera exitosa si ocurre al menos una de estas cosas:
+
+1. El programa detecta/inicializa correctamente el ENC28J60 por SPI.
+2. Al conectar RJ45, el módulo obtiene IP por DHCP.
+3. Con IP fija, el módulo queda accesible desde un computador en la misma red.
+4. El servidor web simple responde con un texto de prueba.
+5. El monitor serial muestra datos coherentes y no reporta error de SPI/chip.
+
+Errores esperables y diagnóstico
+================================
+Si no detecta el chip:
+- Revisar que SCK esté en GPIO14.
+- Revisar que ST/MOSI esté en GPIO27.
+- Revisar que SO/MISO esté en GPIO26.
+- Revisar que CS esté en GPIO25.
+- Revisar que el código use exactamente esos GPIO.
+- Revisar que haya GND común.
+- Medir 5 V entre 5V y GND del módulo.
+- Medir si aparece 3,3 V entre Q3 y GND cuando se alimenta por 5V.
+- Probar conectar RST con pull-up a Q3/3.3V mediante 10 kΩ o conectarlo a un GPIO para reset manual.
+- Probar otro cable dupont.
+- Bajar velocidad SPI si la librería lo permite.
+
+Si detecta el chip pero no hay red:
+- Conectar RJ45 a un switch/router.
+- Revisar LEDs de link/activity.
+- Probar con IP fija en vez de DHCP.
+- Verificar que el notebook esté en la misma subred.
+- Probar otro cable Ethernet.
+- No probar todavía directo al PLC si no se conoce la configuración IP del CP 443-1.
+
+Si DHCP falla:
+- No significa necesariamente que el ENC28J60 esté mal.
+- Puede ser que no haya servidor DHCP en esa red.
+- Usar IP fija para la prueba.
+
+Requisitos para el código que debe generar Codex
+================================================
+El código debe:
+- Estar escrito como sketch Arduino para ESP32.
+- Usar los GPIO definidos:
+    SCK 14
+    MOSI 27
+    MISO 26
+    CS 25
+- No usar RST ni INT inicialmente.
+- Mostrar mensajes claros por Serial.
+- Intentar inicialización del ENC28J60.
+- Intentar DHCP y, si falla, permitir IP fija.
+- Idealmente incluir un servidor web de prueba en puerto 80.
+- Mantener el código simple, porque es descartable y solo sirve para diagnóstico.
+
+Valores sugeridos
+=================
+MAC:
+    DE:AD:BE:EF:28:60
+
+IP fija sugerida, solo si la red es 192.168.1.x:
+    IP:      192.168.1.77
+    Gateway: 192.168.1.1
+    DNS:     192.168.1.1
+    Máscara: 255.255.255.0
+
+Si la red usa otro rango, estos valores se deben cambiar.
+
+Resumen final del pinout
+========================
+
+    ENC28J60      ESP32
+    ---------------------
+    5V       ->   5V/VIN/VBUS o fuente externa 5 V
+    GND      ->   GND
+    SCK      ->   GPIO14
+    ST/MOSI  ->   GPIO27
+    SO/MISO  ->   GPIO26
+    CS       ->   GPIO25
+
+    RST      ->   No conectado inicialmente
+    LNT/INT  ->   No conectado
+    CLK      ->   No conectado
+    WOL      ->   No conectado
+    Q3/3.3V  ->   No conectado si se usa 5V
+    GND extra->   Opcional
+
+Nota técnica
+============
+Esta prueba solo confirma la comunicación ESP32-ENC28J60 y, opcionalmente, la conectividad Ethernet básica. No confirma todavía comunicación con el PLC Siemens. La comunicación con el PLC se desarrollará después mediante TCP/UDP hacia el CP 443-1, cuando ya se conozca la IP y configuración del PLC.

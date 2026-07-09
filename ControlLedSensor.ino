@@ -14,7 +14,8 @@
 extern Adafruit_AS7341 as7341;
 
 // Pin del pulsador. Se conecta entre D12/GPIO12 y GND.
-const int PULSADOR_LED_SENSOR_PIN = 12;
+const int PULSADOR_LED_SENSOR_PIN = 2;
+// HAY QUE CAMBIARLO DE GPIO PORQUE ESE ES EL DEL LED AZUL DEL DEVKIT
 
 // Corriente del LED integrado del modulo AS7341, en mA.
 const uint16_t LED_SENSOR_CURRENT_MA = 20;
