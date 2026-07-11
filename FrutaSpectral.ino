@@ -15,9 +15,8 @@
 const uint8_t AS7341_I2C_ADDRESS = 0x39;
 
 // Pines I2C usados en el ESP32.
-const int I2C_SDA_PIN = 5;
-const int I2C_SCL_PIN = 18
-;
+const int I2C_SDA_PIN = 21;
+const int I2C_SCL_PIN = 22;
 
 // Objeto de la libreria Adafruit que controla el sensor.
 Adafruit_AS7341 as7341;

@@ -70,7 +70,7 @@ void iniciarComunicacionEthernet() {
 
   if (Ethernet.hardwareStatus() == EthernetNoHardware) {
     Serial.println("ERROR: no se detecto ENC28J60 por SPI.");
-    Serial.println("El clasificador sigue funcionando, pero no habra salida por RJ45.");
+    Serial.println("El sensor sigue funcionando, pero no habra salida por RJ45.");
     comunicacionEthernetLista = false;
     return;
   }
