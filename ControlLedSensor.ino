@@ -13,8 +13,8 @@
 // Objeto global creado en FrutaSpectral.ino; se usa aqui para controlar el LED.
 extern Adafruit_AS7341 as7341;
 
-// Pin del pulsador. Se conecta entre D12/GPIO12 y GND.
-const int PULSADOR_LED_SENSOR_PIN = 4;
+// Pin del pulsador. Se conecta entre D12 y GND.
+const int PULSADOR_LED_SENSOR_PIN = 12;
 
 // Corriente del LED integrado del modulo AS7341, en mA.
 const uint16_t LED_SENSOR_CURRENT_MA = 20;
