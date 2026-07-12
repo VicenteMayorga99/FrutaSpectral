@@ -2,7 +2,7 @@
   Control del LED integrado del modulo AS7341.
 
   Sirve para:
-  - Leer un pulsador conectado entre D12/GPIO12 y GND.
+  - Leer un pulsador conectado entre D13/GPIO13 y GND.
   - Encender o apagar el LED integrado del modulo como interruptor.
   - Aplicar antirrebote para evitar multiples cambios por una sola pulsacion.
 
@@ -13,8 +13,8 @@
 // Objeto global creado en FrutaSpectral.ino; se usa aqui para controlar el LED.
 extern Adafruit_AS7341 as7341;
 
-// Pin del pulsador. Se conecta entre D12 y GND.
-const int PULSADOR_LED_SENSOR_PIN = 12;
+// Pin del pulsador. Se conecta entre D13 y GND.
+const int PULSADOR_LED_SENSOR_PIN = 13;
 
 // Corriente del LED integrado del modulo AS7341, en mA.
 const uint16_t LED_SENSOR_CURRENT_MA = 20;
@@ -29,7 +29,7 @@ bool controlLedSensorIniciado = false;
 
 void iniciarControlLedSensor() {
   // INPUT_PULLUP deja el pin en HIGH cuando el pulsador esta suelto.
-  // Al presionar, el pulsador conecta D12 a GND y el pin pasa a LOW.
+  // Al presionar, el pulsador conecta D13 a GND y el pin pasa a LOW.
   pinMode(PULSADOR_LED_SENSOR_PIN, INPUT_PULLUP);
 
   // Configura una corriente moderada y deja el LED apagado al iniciar.
