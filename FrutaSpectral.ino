@@ -57,6 +57,10 @@ void iniciarControlServo();
 void moverServoAPosicionInicio();
 void moverServoAPosicion1();
 void moverServoAPosicion2();
+void iniciarComunicacionRele();
+void actualizarColorRele(bool frutaRoja);
+void enviarEventoFrutaPorRele();
+void atenderComunicacionRele();
 
 // Histeresis en nm alrededor del promedioVisibleNm usado como umbral.
 // Posicion 1 -> Posicion 2 cuando promedioVisibleNm supera umbral + histeresis.
@@ -68,12 +72,14 @@ bool umbralServoCalibrado = false;
 float umbralServoPromedioVisibleNm = 0.0;
 int posicionServoPorPromedio = 0;
 int lecturasServoDesdeReinicio = 0;
+int zonaPromedioAnterior = 0;
 
 void reiniciarUmbralServo() {
   umbralServoCalibrado = false;
   umbralServoPromedioVisibleNm = 0.0;
   posicionServoPorPromedio = 0;
   lecturasServoDesdeReinicio = 0;
+  zonaPromedioAnterior = 0;
   moverServoAPosicionInicio();
 
   Serial.println();
@@ -96,6 +102,7 @@ void actualizarServoPorPromedioVisible(float promedioVisibleNm) {
     umbralServoPromedioVisibleNm = promedioVisibleNm;
     umbralServoCalibrado = true;
     posicionServoPorPromedio = 0;
+    zonaPromedioAnterior = 0;
 
     Serial.println();
     Serial.println("Umbral servo calibrado con segunda lectura.");
@@ -111,17 +118,39 @@ void actualizarServoPorPromedioVisible(float promedioVisibleNm) {
     return;
   }
 
-  if ((posicionServoPorPromedio == 0 || posicionServoPorPromedio == 1) &&
-      promedioVisibleNm >= umbralServoPromedioVisibleNm + HISTERESIS_SERVO_NM) {
-    posicionServoPorPromedio = 2;
-    moverServoAPosicion2();
-    Serial.println("promedioVisibleNm supero umbral alto: servo a posicion 2.");
-  } else if ((posicionServoPorPromedio == 0 || posicionServoPorPromedio == 2) &&
-             promedioVisibleNm <= umbralServoPromedioVisibleNm - HISTERESIS_SERVO_NM) {
-    posicionServoPorPromedio = 1;
-    moverServoAPosicion1();
-    Serial.println("promedioVisibleNm bajo de umbral bajo: servo a posicion 1.");
+  int zonaPromedioActual = 0;
+
+  if (promedioVisibleNm >= umbralServoPromedioVisibleNm + HISTERESIS_SERVO_NM) {
+    zonaPromedioActual = 1;
+  } else if (promedioVisibleNm <= umbralServoPromedioVisibleNm - HISTERESIS_SERVO_NM) {
+    zonaPromedioActual = -1;
   }
+
+  if (zonaPromedioActual == 1) {
+    if (posicionServoPorPromedio != 2) {
+      posicionServoPorPromedio = 2;
+      moverServoAPosicion2();
+      actualizarColorRele(true);
+      Serial.println("promedioVisibleNm supero umbral alto: servo a posicion 2.");
+    }
+
+    if (zonaPromedioAnterior != zonaPromedioActual) {
+      enviarEventoFrutaPorRele();
+    }
+  } else if (zonaPromedioActual == -1) {
+    if (posicionServoPorPromedio != 1) {
+      posicionServoPorPromedio = 1;
+      moverServoAPosicion1();
+      actualizarColorRele(false);
+      Serial.println("promedioVisibleNm bajo de umbral bajo: servo a posicion 1.");
+    }
+
+    if (zonaPromedioAnterior != zonaPromedioActual) {
+      enviarEventoFrutaPorRele();
+    }
+  }
+
+  zonaPromedioAnterior = zonaPromedioActual;
 }
 
 void iniciarSensorAS7341() {
@@ -170,11 +199,15 @@ void setup() {
 
   // Configura el servo. La decision de posicion se hace con promedioVisibleNm.
   iniciarControlServo();
+
+  // Configura las salidas digitales hacia los reles de comunicacion con el PLC.
+  iniciarComunicacionRele();
 }
 
 void loop() {
   // Actualiza el interruptor del LED del modulo con el pulsador en D13/GPIO13.
   controlarLedSensor();
+  atenderComunicacionRele();
 
   // Toma los datos visibles, los procesa y los imprime por Serial.
   MuestraDatosSensor muestra;
@@ -190,11 +223,13 @@ void loop() {
 
   // Vuelve a actualizar el LED despues de la lectura, porque leer el sensor toma tiempo.
   controlarLedSensor();
+  atenderComunicacionRele();
 
   // Pausa entre lecturas para que la salida serial sea fÃ¡cil de revisar.
   unsigned long inicioPausa = millis();
   while (millis() - inicioPausa < 1000) {
     controlarLedSensor();
+    atenderComunicacionRele();
     delay(10);
   }
 }
