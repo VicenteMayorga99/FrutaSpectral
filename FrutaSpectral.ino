@@ -53,9 +53,6 @@ void controlarLedSensor();
 void iniciarPantalla();
 void actualizarPantallaDatosVisibles(const MuestraDatosSensor *muestra,
                                      const DatosProcesadosVisibles *datos);
-void iniciarComunicacionEthernet();
-void actualizarDatoEthernet(const DatosProcesadosVisibles *datos);
-void atenderComunicacionEthernet();
 void iniciarControlServo();
 void moverServoAPosicionInicio();
 void moverServoAPosicion1();
@@ -173,15 +170,11 @@ void setup() {
 
   // Configura el servo. La decision de posicion se hace con promedioVisibleNm.
   iniciarControlServo();
-
-  // Inicializa la comunicacion RJ45 mediante el modulo ENC28J60.
-  iniciarComunicacionEthernet();
 }
 
 void loop() {
-  // Actualiza el interruptor del LED del modulo con el pulsador en D12.
+  // Actualiza el interruptor del LED del modulo con el pulsador en D13/GPIO13.
   controlarLedSensor();
-  atenderComunicacionEthernet();
 
   // Toma los datos visibles, los procesa y los imprime por Serial.
   MuestraDatosSensor muestra;
@@ -189,9 +182,7 @@ void loop() {
   if (obtenerDatosSeleccionados(&muestra) && procesarDatosVisibles(&muestra, &datos)) {
     imprimirDatosProcesadosEnSerial(&datos);
     actualizarPantallaDatosVisibles(&muestra, &datos);
-    actualizarDatoEthernet(&datos);
     actualizarServoPorPromedioVisible(datos.promedioVisibleNm);
-    atenderComunicacionEthernet();
   }
 
   // Lectura completa comentada. Descomentar para ver todos los canales.
@@ -204,7 +195,6 @@ void loop() {
   unsigned long inicioPausa = millis();
   while (millis() - inicioPausa < 1000) {
     controlarLedSensor();
-    atenderComunicacionEthernet();
     delay(10);
   }
 }
