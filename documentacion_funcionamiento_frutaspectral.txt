@@ -1,0 +1,500 @@
+DOCUMENTACION DEL SISTEMA FRUTASPECTRAL
+=======================================
+
+Proyecto:
+  FrutaSpectral
+
+Objetivo general:
+  El sistema usa una ESP32 para leer un sensor espectral AS7341, procesar la
+  respuesta visible de una fruta, clasificarla respecto de un umbral calibrado
+  automaticamente y entregar la decision a actuadores externos. La salida local
+  incluye una pantalla OLED, un servo de clasificacion y dos salidas digitales
+  para comunicar eventos y color al PLC mediante reles.
+
+
+1. COMPONENTES PRINCIPALES
+--------------------------
+
+1. ESP32 DevKit / ESP32-WROOM-32
+   - Ejecuta el programa principal en Arduino.
+   - Lee el sensor AS7341 por I2C.
+   - Actualiza la pantalla OLED por el mismo bus I2C.
+   - Controla el LED integrado del modulo AS7341 mediante la libreria.
+   - Controla un servo por PWM.
+   - Entrega dos senales digitales hacia reles para comunicarse con el PLC.
+
+2. Sensor espectral AS7341
+   - Sensor de color/espectral usado para medir bandas visibles.
+   - En este programa se leen los canales F4, F5, F6, F7, F8 y Clear.
+   - La direccion I2C configurada es 0x39.
+   - El LED integrado del modulo se usa como fuente de iluminacion controlada.
+
+3. Pantalla OLED SSD1306 I2C de 0.96 pulgadas
+   - Se busca en las direcciones I2C 0x3C y 0x3D.
+   - Muestra el promedio visible en nm y barras de los canales F4 a F8.
+   - Usa el mismo bus I2C que el AS7341.
+
+4. Servo tipo SG90 o equivalente
+   - Recibe una senal PWM desde la ESP32.
+   - Se mueve a una posicion de clasificacion segun la decision del sensor.
+   - Posicion inicial: 120 grados.
+   - Posicion 1: 75 grados.
+   - Posicion 2: 160 grados.
+
+5. Modulo de reles
+   - Se usa como interfaz electrica entre ESP32 y PLC.
+   - La ESP32 solo debe controlar la bobina/entrada del modulo de rele.
+   - El PLC debe recibir senales de 24 VDC a traves de los contactos del rele.
+   - No se debe conectar una entrada de PLC de 24 V directamente a un GPIO de
+     la ESP32.
+
+6. PLC con modulo Siemens 6ES7321-1BH02-0AA0
+   - Este modulo corresponde a entradas digitales de la familia SIMATIC S7-300.
+   - La comunicacion propuesta no usa Ethernet ni Modbus.
+   - El PLC solo lee dos entradas digitales:
+       a) una entrada de clock/evento,
+       b) una entrada de dato/color.
+   - Las entradas del PLC deben cablearse con una fuente de 24 VDC y los
+     contactos de los reles.
+
+
+2. PINOUT USADO EN LA ESP32
+---------------------------
+
+Bus I2C:
+  SDA: GPIO21
+  SCL: GPIO22
+
+Sensor AS7341:
+  I2C direccion 0x39
+  LED integrado controlado por software con la libreria Adafruit_AS7341.
+
+Pulsador del LED del sensor:
+  D13 / GPIO13
+  Conexion: pulsador entre GPIO13 y GND.
+  El programa usa INPUT_PULLUP, por lo que el pin queda en HIGH al soltar y
+  pasa a LOW al presionar.
+
+Servo:
+  PWM: GPIO32
+  Alimentacion recomendada: 5 V externo para el servo.
+  Importante: unir GND de la fuente del servo con GND de la ESP32.
+
+Comunicacion por reles hacia PLC:
+  D26 / GPIO26: clock/evento de fruta.
+  D25 / GPIO25: dato estable de color.
+
+Significado de D25:
+  LOW  = fruta verde.
+  HIGH = fruta roja.
+
+Significado de D26:
+  Pulso de 500 ms cuando se detecta una nueva fruta/evento.
+
+
+3. CONEXION ESP32 - RELES - PLC
+-------------------------------
+
+La comunicacion con el PLC se hace por entradas digitales usando reles como
+aislacion/interfaz. La ESP32 no le entrega tension de 24 V al PLC. La ESP32
+solo activa el modulo de rele.
+
+Lado ESP32 hacia modulo de reles:
+  ESP32 GPIO26 -> entrada del rele de clock/evento.
+  ESP32 GPIO25 -> entrada del rele de color.
+  ESP32 GND    -> GND del modulo de reles.
+  Alimentacion del modulo de reles segun el modulo usado.
+
+Lado PLC con modulo 6ES7321-1BH02-0AA0:
+  Se recomienda usar una fuente de 24 VDC para las entradas del PLC.
+
+  Para la entrada de clock/evento:
+    +24 VDC -> comun/contacto del rele de clock
+    salida contacto rele de clock -> entrada digital PLC I0.x
+    M/0 V de la fuente -> comun M del grupo de entradas del PLC
+
+  Para la entrada de color:
+    +24 VDC -> comun/contacto del rele de color
+    salida contacto rele de color -> entrada digital PLC I0.y
+    M/0 V de la fuente -> comun M del grupo de entradas del PLC
+
+Interpretacion esperada en el PLC:
+  - El PLC detecta flanco del clock/evento.
+  - En ese instante lee la entrada de color.
+  - Si color = 0, se interpreta fruta verde.
+  - Si color = 1, se interpreta fruta roja.
+
+Nota electrica:
+  Algunos modulos de rele son activos en HIGH y otros activos en LOW. El codigo
+  actual asume salida activa en HIGH para activar el rele. Si el modulo fisico
+  usado es activo en LOW, se debe invertir la logica de escritura digital.
+
+
+4. FUNCIONAMIENTO GENERAL DEL PROGRAMA
+--------------------------------------
+
+Al iniciar:
+  1. Se abre el monitor serial a 115200 baudios.
+  2. Se inicia el bus I2C en GPIO21/GPIO22.
+  3. Se prueba e inicializa la pantalla OLED SSD1306.
+  4. Se inicia el sensor AS7341 en direccion 0x39.
+  5. Se configura el pulsador que enciende/apaga el LED del AS7341.
+  6. Se inicializa el servo en 120 grados.
+  7. Se inicializan las salidas por rele hacia el PLC:
+       - GPIO26 clock en LOW.
+       - GPIO25 dato/color en LOW.
+
+Durante el loop:
+  1. Se revisa el pulsador del LED.
+  2. Se atiende el pulso de clock de los reles, para apagarlo luego de 500 ms.
+  3. Se lee una muestra espectral del AS7341.
+  4. Se procesan los datos visibles.
+  5. Se imprimen los datos procesados por Serial.
+  6. Se actualiza la pantalla OLED.
+  7. Se actualiza la decision del servo y de la comunicacion al PLC.
+  8. Se repite el ciclo aproximadamente cada 1 segundo.
+
+
+5. LOGICA DE CALIBRACION Y CLASIFICACION
+----------------------------------------
+
+El valor principal usado para clasificar es:
+  promedioVisibleNm
+
+Este valor se calcula como promedio ponderado de las bandas visibles:
+  F4 = 515 nm
+  F5 = 555 nm
+  F6 = 590 nm
+  F7 = 630 nm
+  F8 = 680 nm
+
+Formula conceptual:
+  promedioVisibleNm =
+    (515*F4 + 555*F5 + 590*F6 + 630*F7 + 680*F8) /
+    (F4 + F5 + F6 + F7 + F8)
+
+Calibracion:
+  - La primera lectura valida se ignora para el umbral.
+  - La segunda lectura valida se guarda como umbral.
+  - Antes de tener esa segunda lectura, el servo queda en posicion inicial.
+  - Al calibrar, el servo tambien queda en posicion inicial.
+
+Histeresis:
+  - Histeresis actual: +/- 3.0 nm.
+  - Si promedioVisibleNm sube sobre umbral + 3.0 nm:
+      se considera zona alta, fruta roja, posicion 2.
+  - Si promedioVisibleNm baja bajo umbral - 3.0 nm:
+      se considera zona baja, fruta verde, posicion 1.
+  - Si promedioVisibleNm queda dentro de la banda:
+      no se cambia la clasificacion y se rearma el evento para contar una nueva
+      fruta cuando vuelva a salir de la banda.
+
+Reinicio del umbral:
+  - Cada vez que el pulsador cambia el estado del LED del AS7341, se reinicia
+    el umbral.
+  - El servo vuelve a posicion inicial.
+  - La siguiente primera lectura se ignora.
+  - La segunda lectura vuelve a ser el nuevo umbral.
+
+
+6. LOGICA DE COMUNICACION AL PLC POR RELES
+------------------------------------------
+
+La comunicacion al PLC separa dato y evento:
+
+Dato/color en GPIO25:
+  - Es una senal estable.
+  - Funciona igual que la receta de decision del servo.
+  - Solo cambia cuando cambia la decision de color.
+  - LOW significa verde.
+  - HIGH significa roja.
+
+Clock/evento en GPIO26:
+  - No representa el color.
+  - Solo avisa que ocurrio una nueva deteccion.
+  - Genera un pulso de 500 ms.
+  - El PLC debe usar el flanco o presencia del pulso para leer el dato estable
+    en GPIO25.
+
+Rearme de evento:
+  - Si la lectura sale de la banda de histeresis, se genera un evento.
+  - Si permanece fuera de la banda, no se repite el evento en cada ciclo.
+  - Cuando la lectura vuelve a la banda central, el sistema queda armado para
+    contar otra fruta.
+  - Esto permite contar dos frutas rojas seguidas, siempre que entre ambas el
+    valor vuelva a la zona central.
+
+
+7. ARCHIVOS .INO DEL SKETCH PRINCIPAL
+-------------------------------------
+
+El sketch principal esta dividido en varios archivos .ino dentro de la misma
+carpeta. Arduino los compila juntos como un solo programa. La carpeta debe
+llamarse FrutaSpectral y el archivo principal es FrutaSpectral.ino.
+
+Los archivos activos del sketch principal son:
+  - FrutaSpectral.ino
+  - ObtencionDeDatos.ino
+  - ProcesamientoDatos.ino
+  - ComunicacionPantalla.ino
+  - ControlLedSensor.ino
+  - ControlServo.ino
+  - ComunicacionRele.ino
+
+La carpeta pruebas contiene sketches de diagnostico separados y no forma parte
+del flujo principal al compilar FrutaSpectral.
+
+
+8. DESCRIPCION POR ARCHIVO Y FUNCIONES
+--------------------------------------
+
+8.1 FrutaSpectral.ino
+
+Rol:
+  Es el orquestador principal. Define estructuras compartidas, constantes
+  principales, prototipos de funciones y el flujo de setup/loop.
+
+Estructuras:
+  MuestraDatosSensor:
+    Guarda lecturas crudas f4, f5, f6, f7, f8 y clear.
+
+  DatosProcesadosVisibles:
+    Guarda los canales normalizados, la suma visible, promedioVisibleNm y el
+    estado de saturacion.
+
+Constantes principales:
+  AS7341_I2C_ADDRESS = 0x39
+  I2C_SDA_PIN = 21
+  I2C_SCL_PIN = 22
+  HISTERESIS_SERVO_NM = 3.0
+  LECTURA_CALIBRACION_SERVO = 2
+
+Funciones:
+  reiniciarUmbralServo()
+    Reinicia la calibracion de umbral, vuelve el servo a la posicion inicial y
+    obliga a usar la segunda lectura siguiente como nuevo umbral.
+
+  actualizarServoPorPromedioVisible(float promedioVisibleNm)
+    Aplica la logica de calibracion, histeresis, movimiento del servo y eventos
+    hacia el PLC. Si la lectura sale por arriba de la banda, selecciona roja.
+    Si sale por abajo, selecciona verde.
+
+  iniciarSensorAS7341()
+    Inicia el AS7341 en I2C, configura tiempo de integracion, pasos de
+    integracion y ganancia. Si el sensor no responde, detiene el programa.
+
+  setup()
+    Inicializa Serial, I2C, pantalla, sensor, LED, servo y comunicacion por
+    reles.
+
+  loop()
+    Ejecuta el ciclo principal de lectura, procesamiento, visualizacion,
+    clasificacion y comunicacion al PLC.
+
+
+8.2 ObtencionDeDatos.ino
+
+Rol:
+  Configura manualmente el SMUX del AS7341 para leer los canales utiles del
+  proyecto y entrega una muestra cruda al resto del programa.
+
+Funciones:
+  escribirRegistroAS7341(uint8_t registro, uint8_t valor)
+    Escribe un valor en un registro interno del AS7341 por I2C.
+
+  leerRegistroAS7341(uint8_t registro)
+    Lee un registro interno del AS7341 por I2C.
+
+  leerRegistrosAS7341(uint8_t registroInicial, uint8_t *datos, uint8_t cantidad)
+    Lee varios registros consecutivos del AS7341.
+
+  aplicarSmuxF4F8Clear()
+    Detiene la medicion espectral, programa el SMUX para mapear F4, F5, F6,
+    F7, F8 y Clear a los ADC internos, y espera a que el sensor aplique la
+    configuracion.
+
+  leerF4F8ClearUnCiclo(...)
+    Aplica el SMUX, activa la medicion espectral, espera datos y lee los seis
+    valores de interes.
+
+  obtenerDatosSeleccionados(MuestraDatosSensor *muestra)
+    Funcion publica usada por FrutaSpectral.ino. Llena la estructura
+    MuestraDatosSensor con f4, f5, f6, f7, f8 y clear.
+
+
+8.3 ProcesamientoDatos.ino
+
+Rol:
+  Convierte la muestra cruda del sensor en variables utiles para clasificar.
+
+Constante:
+  UMBRAL_SATURACION_VISIBLE = 60000
+
+Funciones:
+  procesarDatosVisibles(const MuestraDatosSensor *muestra,
+                        DatosProcesadosVisibles *datos)
+    Calcula suma visible, normalizados F4-F8, promedioVisibleNm y saturacion.
+
+  imprimirDatosProcesadosEnSerial(const DatosProcesadosVisibles *datos)
+    Imprime por Serial los normalizados, la suma visible, promedioVisibleNm y
+    el estado de saturacion.
+
+
+8.4 ComunicacionPantalla.ino
+
+Rol:
+  Maneja la pantalla OLED SSD1306 por I2C.
+
+Funciones:
+  probarDireccionI2C(uint8_t direccion)
+    Revisa si un dispositivo responde en una direccion I2C.
+
+  calcularPosicionOnda(float longitudOndaNm)
+    Convierte promedioVisibleNm en una posicion horizontal para la barra
+    superior de la OLED.
+
+  obtenerMaximoCanales(const MuestraDatosSensor *muestra)
+    Obtiene el valor maximo entre F4-F8 y Clear para escalar las barras.
+
+  dibujarBarraCanal(int x, const char *etiqueta, uint16_t valor,
+                    uint16_t maximo)
+    Dibuja una barra vertical de un canal visible.
+
+  actualizarPantallaDatosVisibles(const MuestraDatosSensor *muestra,
+                                  const DatosProcesadosVisibles *datos)
+    Actualiza la pantalla con promedioVisibleNm y barras F4-F8.
+
+  iniciarPantalla()
+    Busca la OLED en 0x3C o 0x3D, inicia SSD1306 y deja la pantalla lista.
+
+
+8.5 ControlLedSensor.ino
+
+Rol:
+  Maneja el pulsador que prende/apaga el LED integrado del AS7341.
+
+Constantes:
+  PULSADOR_LED_SENSOR_PIN = 13
+  LED_SENSOR_CURRENT_MA = 20
+  ANTIRREBOTE_MS = 50
+
+Funciones:
+  iniciarControlLedSensor()
+    Configura GPIO13 como INPUT_PULLUP, define la corriente del LED y lo deja
+    apagado al iniciar.
+
+  controlarLedSensor()
+    Lee el pulsador con antirrebote. Cuando detecta una nueva pulsacion,
+    alterna el LED del AS7341 y llama a reiniciarUmbralServo().
+
+
+8.6 ControlServo.ino
+
+Rol:
+  Genera PWM para el servo y evita repetir movimientos innecesarios.
+
+Constantes:
+  SERVO_PWM_PIN = 32
+  ANGULO_SERVO_INICIO = 120
+  ANGULO_SERVO_POSICION_1 = 75
+  ANGULO_SERVO_POSICION_2 = 160
+  SERVO_PWM_FRECUENCIA_HZ = 50
+  SERVO_PWM_RESOLUCION_BITS = 16
+  SERVO_PULSO_MIN_US = 500
+  SERVO_PULSO_MAX_US = 2400
+  SERVO_PERIODO_US = 20000
+
+Funciones:
+  convertirAnguloServoADuty(int angulo)
+    Convierte un angulo de 0 a 180 grados al duty cycle necesario para PWM.
+
+  escribirAnguloServo(int angulo)
+    Escribe el duty PWM correspondiente al angulo solicitado.
+
+  moverServoSiCambio(int nuevoEstado, int angulo, const char *etiqueta)
+    Mueve el servo solo si el estado pedido es distinto al ultimo estado.
+
+  iniciarControlServo()
+    Configura PWM con ledcAttach y posiciona el servo en 120 grados.
+
+  asegurarControlServoIniciado()
+    Inicia el control del servo si todavia no fue inicializado.
+
+  moverServoAPosicionInicio()
+    Mueve el servo a 120 grados.
+
+  moverServoAPosicion1()
+    Mueve el servo a 75 grados.
+
+  moverServoAPosicion2()
+    Mueve el servo a 160 grados.
+
+
+8.7 ComunicacionRele.ino
+
+Rol:
+  Genera la comunicacion digital simple hacia el PLC mediante reles.
+
+Constantes:
+  RELE_CLOCK_PIN = 26
+  RELE_DATO_COLOR_PIN = 25
+  RELE_CLOCK_PULSO_MS = 500
+
+Funciones:
+  iniciarComunicacionRele()
+    Configura GPIO26 y GPIO25 como salidas, ambas inicialmente en LOW.
+
+  asegurarComunicacionReleIniciada()
+    Inicializa la comunicacion por reles si aun no estaba lista.
+
+  actualizarColorRele(bool frutaRoja)
+    Actualiza el dato estable de color:
+      false -> verde -> LOW
+      true  -> roja  -> HIGH
+
+  enviarEventoFrutaPorRele()
+    Activa el clock en GPIO26 para avisar al PLC que hay una nueva fruta.
+
+  atenderComunicacionRele()
+    Apaga el clock despues de 500 ms usando millis(), sin bloquear el resto del
+    programa.
+
+
+9. MENSAJES SERIAL IMPORTANTES
+------------------------------
+
+El monitor serial sirve para diagnostico. Los mensajes mas importantes son:
+  - Deteccion o falla de pantalla OLED.
+  - Inicio correcto o falla del AS7341.
+  - Valores procesados de F4-F8, suma visible, promedioVisibleNm y saturacion.
+  - Calibracion del umbral con la segunda lectura.
+  - Movimiento del servo a posicion inicial, posicion 1 o posicion 2.
+  - Cambio del dato estable hacia PLC.
+  - Pulso de clock activo y apagado.
+
+
+10. RESUMEN PARA INFORME
+------------------------
+
+El sistema implementa un clasificador de fruta basado en medicion espectral.
+La ESP32 adquiere datos del sensor AS7341 usando I2C y selecciona las bandas
+visibles F4 a F8. Con esas bandas calcula un promedio visible ponderado en
+nanometros, que resume la tendencia espectral de la muestra. El valor de
+referencia se calibra automaticamente usando la segunda lectura valida despues
+del encendido del sistema o despues de cambiar el estado del LED de iluminacion.
+
+La clasificacion se realiza mediante una banda de histeresis alrededor del
+umbral calibrado. Si el promedio visible supera el umbral superior, el sistema
+clasifica la fruta como roja y mueve el servo a la posicion 2. Si el promedio
+visible cae bajo el umbral inferior, el sistema clasifica la fruta como verde y
+mueve el servo a la posicion 1. La histeresis evita oscilaciones cuando el valor
+medido queda cerca del umbral.
+
+La comunicacion con el PLC se hace con una interfaz discreta por reles. La ESP32
+mantiene un dato estable de color en GPIO25 y genera un pulso de evento en
+GPIO26 cada vez que detecta una nueva fruta. El PLC, conectado a un modulo de
+entradas digitales Siemens 6ES7321-1BH02-0AA0, debe leer la entrada de color
+cuando detecta el pulso de clock. Esta solucion evita implementar protocolos de
+comunicacion industrial en esta etapa y permite que el PLC reciba la informacion
+como dos senales digitales simples.
+
