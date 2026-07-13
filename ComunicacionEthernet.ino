@@ -46,11 +46,26 @@ float ultimoPromedioVisibleNm = 0.0;
 uint16_t ultimoPromedioVisibleNmX100 = 0;
 bool hayPromedioVisibleValido = false;
 unsigned long ultimoPromedioVisibleMs = 0;
+unsigned long ultimaSolicitudModbusMs = 0;
+unsigned long ultimaImpresionEstadoEthernetMs = 0;
+int ultimoEstadoLinkEthernet = -1;
 
 void imprimirDireccionEthernet(const char *etiqueta, IPAddress direccion) {
   Serial.print(etiqueta);
   Serial.print(": ");
   Serial.println(direccion);
+}
+
+void imprimirEstadoLinkEthernet(int estadoLink) {
+  Serial.print("Link Ethernet: ");
+
+  if (estadoLink == LinkON) {
+    Serial.println("conectado");
+  } else if (estadoLink == LinkOFF) {
+    Serial.println("desconectado");
+  } else {
+    Serial.println("desconocido");
+  }
 }
 
 void iniciarComunicacionEthernet() {
@@ -90,7 +105,10 @@ void iniciarComunicacionEthernet() {
   Serial.print("HTTP prueba: http://");
   Serial.println(Ethernet.localIP());
 
-  if (Ethernet.linkStatus() == LinkOFF) {
+  ultimoEstadoLinkEthernet = Ethernet.linkStatus();
+  imprimirEstadoLinkEthernet(ultimoEstadoLinkEthernet);
+
+  if (ultimoEstadoLinkEthernet == LinkOFF) {
     Serial.println("AVISO: no hay link RJ45. Conecta cable Ethernet cuando quieras probar red.");
   }
 }
@@ -152,6 +170,8 @@ void atenderClienteModbus() {
     return;
   }
 
+  Serial.println("Cliente Modbus conectado.");
+
   uint8_t solicitud[12];
   int recibidos = 0;
   unsigned long inicio = millis();
@@ -165,6 +185,7 @@ void atenderClienteModbus() {
   }
 
   if (recibidos < 12) {
+    Serial.println("Error Modbus: solicitud incompleta o timeout.");
     cliente.stop();
     return;
   }
@@ -174,13 +195,37 @@ void atenderClienteModbus() {
   uint8_t funcion = solicitud[7];
   uint16_t direccionInicial = ((uint16_t)solicitud[8] << 8) | solicitud[9];
   uint16_t cantidad = ((uint16_t)solicitud[10] << 8) | solicitud[11];
+  ultimaSolicitudModbusMs = millis();
+
+  Serial.print("Funcion Modbus recibida: ");
+  Serial.println(funcion);
+  Serial.print("Unit ID recibido: ");
+  Serial.println(unitId);
+  Serial.print("Direccion solicitada: ");
+  Serial.println(direccionInicial);
+  Serial.print("Cantidad solicitada: ");
+  Serial.println(cantidad);
 
   if (protocolo != 0 || unitId != MODBUS_UNIT_ID) {
+    if (protocolo != 0) {
+      Serial.print("Error Modbus: protocolo MBAP incorrecto: ");
+      Serial.println(protocolo);
+    }
+
+    if (unitId != MODBUS_UNIT_ID) {
+      Serial.print("Error Modbus: Unit ID incorrecto. Esperado ");
+      Serial.print(MODBUS_UNIT_ID);
+      Serial.print(", recibido ");
+      Serial.println(unitId);
+    }
+
     cliente.stop();
     return;
   }
 
   if (funcion != 0x03 && funcion != 0x04) {
+    Serial.print("Error Modbus: funcion no soportada: ");
+    Serial.println(funcion);
     enviarExcepcionModbus(cliente, solicitud, funcion, 0x01);
     cliente.stop();
     return;
@@ -188,6 +233,7 @@ void atenderClienteModbus() {
 
   if (cantidad < 1 || cantidad > 2 ||
       direccionInicial + cantidad > 2) {
+    Serial.println("Error Modbus: registro fuera de rango.");
     enviarExcepcionModbus(cliente, solicitud, funcion, 0x02);
     cliente.stop();
     return;
@@ -210,9 +256,16 @@ void atenderClienteModbus() {
     uint16_t valor = leerRegistroModbus(direccionInicial + i);
     cliente.write((uint8_t)(valor >> 8));
     cliente.write((uint8_t)(valor & 0xFF));
+
+    Serial.print("Valor enviado registro ");
+    Serial.print(direccionInicial + i);
+    Serial.print(": ");
+    Serial.println(valor);
   }
 
   cliente.stop();
+  Serial.print("Valor enviado promedioVisibleNm x100 = ");
+  Serial.println(ultimoPromedioVisibleNmX100);
   Serial.println("Dato promedioVisibleNm enviado por Modbus TCP.");
 }
 
@@ -260,6 +313,27 @@ void atenderClientePromedioHttp() {
 void atenderComunicacionEthernet() {
   if (!comunicacionEthernetLista) {
     return;
+  }
+
+  unsigned long ahora = millis();
+  int estadoLinkActual = Ethernet.linkStatus();
+
+  if (estadoLinkActual != ultimoEstadoLinkEthernet) {
+    ultimoEstadoLinkEthernet = estadoLinkActual;
+    imprimirEstadoLinkEthernet(estadoLinkActual);
+  }
+
+  if (ahora - ultimaImpresionEstadoEthernetMs >= 5000) {
+    ultimaImpresionEstadoEthernetMs = ahora;
+    imprimirEstadoLinkEthernet(estadoLinkActual);
+
+    if (ultimaSolicitudModbusMs == 0) {
+      Serial.println("Sin solicitudes Modbus recibidas.");
+    } else {
+      Serial.print("Ultima solicitud Modbus hace ");
+      Serial.print(ahora - ultimaSolicitudModbusMs);
+      Serial.println(" ms.");
+    }
   }
 
   atenderClienteModbus();

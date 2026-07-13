@@ -7,7 +7,6 @@
   - Aplicar antirrebote para evitar multiples cambios por una sola pulsacion.
 
 */
-
 #include <Adafruit_AS7341.h>
 
 // Objeto global creado en FrutaSpectral.ino; se usa aqui para controlar el LED.
