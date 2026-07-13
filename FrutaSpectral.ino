@@ -57,38 +57,52 @@ void iniciarComunicacionEthernet();
 void actualizarDatoEthernet(const DatosProcesadosVisibles *datos);
 void atenderComunicacionEthernet();
 void iniciarControlServo();
+void moverServoAPosicionInicio();
 void moverServoAPosicion1();
 void moverServoAPosicion2();
 
-// Histeresis en nm alrededor del primer promedioVisibleNm medido.
+// Histeresis en nm alrededor del promedioVisibleNm usado como umbral.
 // Posicion 1 -> Posicion 2 cuando promedioVisibleNm supera umbral + histeresis.
 // Posicion 2 -> Posicion 1 cuando promedioVisibleNm baja de umbral - histeresis.
-const float HISTERESIS_SERVO_NM = 5.0;
+const float HISTERESIS_SERVO_NM = 3.0;
+const int LECTURA_CALIBRACION_SERVO = 2;
 
 bool umbralServoCalibrado = false;
 float umbralServoPromedioVisibleNm = 0.0;
 int posicionServoPorPromedio = 0;
+int lecturasServoDesdeReinicio = 0;
 
 void reiniciarUmbralServo() {
   umbralServoCalibrado = false;
   umbralServoPromedioVisibleNm = 0.0;
   posicionServoPorPromedio = 0;
+  lecturasServoDesdeReinicio = 0;
   moverServoAPosicionInicio();
 
   Serial.println();
   Serial.println("Umbral servo reiniciado por cambio de estado del LED.");
-  Serial.println("La proxima lectura de promedioVisibleNm sera el nuevo umbral.");
+  Serial.println("La segunda lectura de promedioVisibleNm sera el nuevo umbral.");
 }
 
 void actualizarServoPorPromedioVisible(float promedioVisibleNm) {
   if (!umbralServoCalibrado) {
+    lecturasServoDesdeReinicio++;
+
+    if (lecturasServoDesdeReinicio < LECTURA_CALIBRACION_SERVO) {
+      Serial.println();
+      Serial.println("Primera lectura recibida: servo queda en espera.");
+      Serial.print("promedioVisibleNm lectura 1: ");
+      Serial.println(promedioVisibleNm, 2);
+      return;
+    }
+
     umbralServoPromedioVisibleNm = promedioVisibleNm;
     umbralServoCalibrado = true;
-    posicionServoPorPromedio = 1;
-    moverServoAPosicion1();
+    posicionServoPorPromedio = 0;
 
     Serial.println();
-    Serial.println("Umbral servo calibrado con primera lectura.");
+    Serial.println("Umbral servo calibrado con segunda lectura.");
+    Serial.println("Servo queda en posicion inicial hasta salir de la histeresis.");
     Serial.print("Umbral promedioVisibleNm: ");
     Serial.println(umbralServoPromedioVisibleNm, 2);
     Serial.print("Histeresis servo nm: +/-");
@@ -100,12 +114,12 @@ void actualizarServoPorPromedioVisible(float promedioVisibleNm) {
     return;
   }
 
-  if (posicionServoPorPromedio == 1 &&
+  if ((posicionServoPorPromedio == 0 || posicionServoPorPromedio == 1) &&
       promedioVisibleNm >= umbralServoPromedioVisibleNm + HISTERESIS_SERVO_NM) {
     posicionServoPorPromedio = 2;
     moverServoAPosicion2();
     Serial.println("promedioVisibleNm supero umbral alto: servo a posicion 2.");
-  } else if (posicionServoPorPromedio == 2 &&
+  } else if ((posicionServoPorPromedio == 0 || posicionServoPorPromedio == 2) &&
              promedioVisibleNm <= umbralServoPromedioVisibleNm - HISTERESIS_SERVO_NM) {
     posicionServoPorPromedio = 1;
     moverServoAPosicion1();
