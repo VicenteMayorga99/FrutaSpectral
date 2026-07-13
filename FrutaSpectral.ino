@@ -56,6 +56,62 @@ void actualizarPantallaDatosVisibles(const MuestraDatosSensor *muestra,
 void iniciarComunicacionEthernet();
 void actualizarDatoEthernet(const DatosProcesadosVisibles *datos);
 void atenderComunicacionEthernet();
+void iniciarControlServo();
+void moverServoAPosicion1();
+void moverServoAPosicion2();
+
+// Histeresis en nm alrededor del primer promedioVisibleNm medido.
+// Posicion 1 -> Posicion 2 cuando promedioVisibleNm supera umbral + histeresis.
+// Posicion 2 -> Posicion 1 cuando promedioVisibleNm baja de umbral - histeresis.
+const float HISTERESIS_SERVO_NM = 5.0;
+
+bool umbralServoCalibrado = false;
+float umbralServoPromedioVisibleNm = 0.0;
+int posicionServoPorPromedio = 0;
+
+void reiniciarUmbralServo() {
+  umbralServoCalibrado = false;
+  umbralServoPromedioVisibleNm = 0.0;
+  posicionServoPorPromedio = 0;
+  moverServoAPosicionInicio();
+
+  Serial.println();
+  Serial.println("Umbral servo reiniciado por cambio de estado del LED.");
+  Serial.println("La proxima lectura de promedioVisibleNm sera el nuevo umbral.");
+}
+
+void actualizarServoPorPromedioVisible(float promedioVisibleNm) {
+  if (!umbralServoCalibrado) {
+    umbralServoPromedioVisibleNm = promedioVisibleNm;
+    umbralServoCalibrado = true;
+    posicionServoPorPromedio = 1;
+    moverServoAPosicion1();
+
+    Serial.println();
+    Serial.println("Umbral servo calibrado con primera lectura.");
+    Serial.print("Umbral promedioVisibleNm: ");
+    Serial.println(umbralServoPromedioVisibleNm, 2);
+    Serial.print("Histeresis servo nm: +/-");
+    Serial.println(HISTERESIS_SERVO_NM, 2);
+    Serial.print("Cambio a posicion 2 sobre: ");
+    Serial.println(umbralServoPromedioVisibleNm + HISTERESIS_SERVO_NM, 2);
+    Serial.print("Cambio a posicion 1 bajo: ");
+    Serial.println(umbralServoPromedioVisibleNm - HISTERESIS_SERVO_NM, 2);
+    return;
+  }
+
+  if (posicionServoPorPromedio == 1 &&
+      promedioVisibleNm >= umbralServoPromedioVisibleNm + HISTERESIS_SERVO_NM) {
+    posicionServoPorPromedio = 2;
+    moverServoAPosicion2();
+    Serial.println("promedioVisibleNm supero umbral alto: servo a posicion 2.");
+  } else if (posicionServoPorPromedio == 2 &&
+             promedioVisibleNm <= umbralServoPromedioVisibleNm - HISTERESIS_SERVO_NM) {
+    posicionServoPorPromedio = 1;
+    moverServoAPosicion1();
+    Serial.println("promedioVisibleNm bajo de umbral bajo: servo a posicion 1.");
+  }
+}
 
 void iniciarSensorAS7341() {
   Serial.println();
@@ -101,6 +157,9 @@ void setup() {
   // Configura el pulsador que controla el LED integrado del modulo AS7341.
   controlarLedSensor();
 
+  // Configura el servo. La decision de posicion se hace con promedioVisibleNm.
+  iniciarControlServo();
+
   // Inicializa la comunicacion RJ45 mediante el modulo ENC28J60.
   iniciarComunicacionEthernet();
 }
@@ -117,6 +176,7 @@ void loop() {
     imprimirDatosProcesadosEnSerial(&datos);
     actualizarPantallaDatosVisibles(&muestra, &datos);
     actualizarDatoEthernet(&datos);
+    actualizarServoPorPromedioVisible(datos.promedioVisibleNm);
     atenderComunicacionEthernet();
   }
 

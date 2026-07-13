@@ -12,6 +12,8 @@
 // Objeto global creado en FrutaSpectral.ino; se usa aqui para controlar el LED.
 extern Adafruit_AS7341 as7341;
 
+void reiniciarUmbralServo();
+
 // Pin del pulsador. Se conecta entre D13 y GND.
 const int PULSADOR_LED_SENSOR_PIN = 13;
 
@@ -54,6 +56,7 @@ void controlarLedSensor() {
       ahora - ultimoCambioPulsador >= ANTIRREBOTE_MS) {
     ledSensorEncendido = !ledSensorEncendido;
     as7341.enableLED(ledSensorEncendido);
+    reiniciarUmbralServo();
     ultimoCambioPulsador = ahora;
   }
 
