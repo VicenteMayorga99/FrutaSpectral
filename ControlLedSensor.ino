@@ -20,6 +20,10 @@ const int PULSADOR_LED_SENSOR_PIN = 13;
 // Corriente del LED integrado del modulo AS7341, en mA.
 const uint16_t LED_SENSOR_CURRENT_MA = 20;
 
+// LED integrado usual de la ESP32 DevKit.
+const int LED_DEVKIT_PIN = 2;
+const unsigned long LED_DEVKIT_PARPADEO_MS = 120;
+
 // Tiempo minimo para ignorar rebotes mecanicos del pulsador.
 const unsigned long ANTIRREBOTE_MS = 50;
 
@@ -28,15 +32,29 @@ bool lecturaAnteriorPulsador = HIGH;
 unsigned long ultimoCambioPulsador = 0;
 bool controlLedSensorIniciado = false;
 
+void iniciarLedDevkit() {
+  pinMode(LED_DEVKIT_PIN, OUTPUT);
+  digitalWrite(LED_DEVKIT_PIN, LOW);
+}
+
+void parpadearLedDevkitCalibracion() {
+  for (int i = 0; i < 3; i++) {
+    digitalWrite(LED_DEVKIT_PIN, HIGH);
+    delay(LED_DEVKIT_PARPADEO_MS);
+    digitalWrite(LED_DEVKIT_PIN, LOW);
+    delay(LED_DEVKIT_PARPADEO_MS);
+  }
+}
+
 void iniciarControlLedSensor() {
   // INPUT_PULLUP deja el pin en HIGH cuando el pulsador esta suelto.
   // Al presionar, el pulsador conecta D13 a GND y el pin pasa a LOW.
   pinMode(PULSADOR_LED_SENSOR_PIN, INPUT_PULLUP);
 
-  // Configura una corriente moderada y deja el LED apagado al iniciar.
+  // Configura una corriente moderada y deja el LED encendido al iniciar.
   as7341.setLEDCurrent(LED_SENSOR_CURRENT_MA);
-  as7341.enableLED(false);
-  ledSensorEncendido = false;
+  as7341.enableLED(true);
+  ledSensorEncendido = true;
   lecturaAnteriorPulsador = digitalRead(PULSADOR_LED_SENSOR_PIN);
   ultimoCambioPulsador = millis();
   controlLedSensorIniciado = true;

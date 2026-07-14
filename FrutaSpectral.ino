@@ -50,6 +50,8 @@ bool obtenerDatosSeleccionados(MuestraDatosSensor *muestra);
 bool procesarDatosVisibles(const MuestraDatosSensor *muestra, DatosProcesadosVisibles *datos);
 void imprimirDatosProcesadosEnSerial(const DatosProcesadosVisibles *datos);
 void controlarLedSensor();
+void iniciarLedDevkit();
+void parpadearLedDevkitCalibracion();
 void iniciarPantalla();
 void actualizarPantallaDatosVisibles(const MuestraDatosSensor *muestra,
                                      const DatosProcesadosVisibles *datos);
@@ -115,6 +117,7 @@ void actualizarServoPorPromedioVisible(float promedioVisibleNm) {
     Serial.println(umbralServoPromedioVisibleNm + HISTERESIS_SERVO_NM, 2);
     Serial.print("Cambio a posicion 1 bajo: ");
     Serial.println(umbralServoPromedioVisibleNm - HISTERESIS_SERVO_NM, 2);
+    parpadearLedDevkitCalibracion();
     return;
   }
 
@@ -187,6 +190,9 @@ void setup() {
 
   // Inicializa el bus I2C compartido por la pantalla y el sensor.
   Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
+
+  // Configura el LED integrado de la ESP32 DevKit para avisos de estado.
+  iniciarLedDevkit();
 
   // Primero prueba la pantalla, para confirmar que la OLED responde.
   iniciarPantalla();
